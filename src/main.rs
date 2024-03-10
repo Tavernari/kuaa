@@ -42,6 +42,7 @@ struct KTokensBalanceData {
 }
 
 const KUAA_API_KEY_ENV: &str = "KUAA_API_KEY"; // Constant for the environment variable name
+const KUAA_SERVER_URL: &str = "https://kuaa.tools"; // Change to your API's URL
 
 fn get_git_diff_staged() -> Result<String, std::io::Error> {
     let output = Command::new("git").args(["diff", "--cached"]).output()?;
@@ -58,8 +59,8 @@ fn get_git_diff_staged() -> Result<String, std::io::Error> {
 
 async fn fetch_balance(api_key: &str) -> Result<(), ReqwestError> {
     let client = Client::new();
-    // let url = "https://kuaa.tools/api/ktokens/balance";
-    let url = "http://localhost:5003/api/ktokens/balance"; // Use this URL for local testing
+
+    let full_url = format!("{}{}", KUAA_SERVER_URL, "/api/ktokens/balance");
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -68,7 +69,7 @@ async fn fetch_balance(api_key: &str) -> Result<(), ReqwestError> {
     );
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
 
-    let response = client.get(url).headers(headers).send().await?;
+    let response = client.get(full_url).headers(headers).send().await?;
 
     if response.status().is_success() {
         let response_json: KTokensBalanceData = response.json().await?;
@@ -94,8 +95,8 @@ async fn fetch_balance(api_key: &str) -> Result<(), ReqwestError> {
 
 async fn send_git_diff(api_key: &str, diff: String, comments: String) -> Result<(), ReqwestError> {
     let client = Client::new();
-    // let url = "https://kuaa.tools/api/prompt";
-    let url = "http://localhost:5003/api/prompt"; // Use this URL for local testing
+
+    let full_url = format!("{}{}", KUAA_SERVER_URL, "/api/prompt");
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -116,7 +117,12 @@ async fn send_git_diff(api_key: &str, diff: String, comments: String) -> Result<
         }
     });
 
-    let response = client.post(url).headers(headers).json(&body).send().await?;
+    let response = client
+        .post(full_url)
+        .headers(headers)
+        .json(&body)
+        .send()
+        .await?;
 
     if response.status().is_success() {
         let response_json: ApiResponse = response.json().await?;
