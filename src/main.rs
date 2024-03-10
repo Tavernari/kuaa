@@ -31,6 +31,16 @@ struct Usage {
     total_tokens: u32,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+struct KTokensBalance {
+    balance: u128,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct KTokensBalanceData {
+    data: KTokensBalance,
+}
+
 const KUAA_API_KEY_ENV: &str = "KUAA_API_KEY"; // Constant for the environment variable name
 
 fn get_git_diff_staged() -> Result<String, std::io::Error> {
@@ -44,6 +54,42 @@ fn get_git_diff_staged() -> Result<String, std::io::Error> {
             "Failed to get git diff",
         ))
     }
+}
+
+async fn fetch_balance(api_key: &str) -> Result<(), ReqwestError> {
+    let client = Client::new();
+    // let url = "https://kuaa.tools/api/ktokens/balance";
+    let url = "http://localhost:5003/api/ktokens/balance"; // Use this URL for local testing
+
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        format!("Bearer {}", api_key).parse().unwrap(),
+    );
+    headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
+
+    let response = client.get(url).headers(headers).send().await?;
+
+    if response.status().is_success() {
+        let response_json: KTokensBalanceData = response.json().await?;
+
+        println!(
+            "{}: {}",
+            Style::new().bold().paint("K-Tokens Balance\n"),
+            Style::new()
+                .bold()
+                .italic()
+                .paint(response_json.data.balance.to_string())
+        );
+    } else {
+        println!(
+            "{} {}",
+            Red.bold().paint("Failed to send data. Status:"),
+            response.status()
+        );
+    }
+
+    Ok(())
 }
 
 async fn send_git_diff(api_key: &str, diff: String, comments: String) -> Result<(), ReqwestError> {
@@ -183,6 +229,8 @@ enum Commands {
         #[command(subcommand)]
         gen_command: GenCommand,
     },
+    /// Fetch K-Tokens balance
+    Balance {},
 }
 
 fn main() {
@@ -215,6 +263,14 @@ fn main() {
                         Err(_) => println!("{} environment variable is not set.", KUAA_API_KEY_ENV),
                     }
                 }
+            },
+            Commands::Balance {} => match env::var(KUAA_API_KEY_ENV) {
+                Ok(api_key) => {
+                    if let Err(e) = fetch_balance(&api_key).await {
+                        eprintln!("Failed to send git diff: {}", e);
+                    }
+                }
+                Err(_) => println!("{} environment variable is not set.", KUAA_API_KEY_ENV),
             },
         }
     });
