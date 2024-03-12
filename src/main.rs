@@ -96,7 +96,7 @@ async fn fetch_balance(api_key: &str) -> Result<(), ReqwestError> {
 async fn send_git_diff(
     api_key: &str,
     diff: String,
-    comments: String,
+    comments: Option<String>,
 ) -> Result<String, ReqwestError> {
     let client = Client::new();
 
@@ -108,6 +108,8 @@ async fn send_git_diff(
         format!("Bearer {}", api_key).parse().unwrap(),
     );
     headers.insert(CONTENT_TYPE, "application/json".parse().unwrap());
+
+    let comments = comments.unwrap_or_else(|| "".to_string());
 
     let body = json!({
         "data":{
@@ -296,9 +298,11 @@ async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
     match gen_command {
         GenCommand::GitCommitMessage { git_commit_message } => {
             let diff = get_git_diff_staged().unwrap_or_else(|_| "".to_string());
-            let comments = git_commit_message.unwrap_or_else(|| "".to_string());
 
-            match send_git_diff(&api_key, diff, comments).await {
+            // comments must be a string prioritizing git_commit_message then coments then empty string
+            let comments = git_commit_message.clone().unwrap_or_else(|| "".to_string());
+
+            match send_git_diff(&api_key, diff, Some(comments)).await {
                 Err(e) => {
                     eprintln!("Failed to send git diff: {}", e);
                 }
@@ -312,7 +316,7 @@ async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
 
 fn handle_commit_message(commit_message: String) -> tokio::task::JoinHandle<()> {
     tokio::task::spawn(async move {
-        println!("Would you like to perform any actions? [[c]ommit, [a]dd-info, [n]othing]");
+        println!("Would you like to perform any actions? [c]ommit or [n]othing");
         let mut action = String::new();
         std::io::stdin()
             .read_line(&mut action)
@@ -349,17 +353,8 @@ fn handle_commit_message(commit_message: String) -> tokio::task::JoinHandle<()> 
 
                 println!("Commit message sent successfully")
             }
-            "a" | "add-info" => {
-                // Ask for more information and improve the commit message
-                println!("Please input more information:");
-                let mut info = String::new();
-                std::io::stdin()
-                    .read_line(&mut info)
-                    .expect("Failed to read line");
-                // Implementation to add info to the commit message or regenerate it
-            }
             "n" | "nothing" => println!("Finishing the process."),
-            _ => println!("Invalid action. Please choose [[c]ommit, [a]dd-info, [n]othing]"),
+            _ => println!("Invalid action. Please choose [c]ommit or [n]othing"),
         }
     })
 }
