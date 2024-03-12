@@ -346,6 +346,8 @@ fn handle_commit_message(commit_message: String) -> tokio::task::JoinHandle<()> 
                     .arg(commit_message)
                     .output()
                     .expect("Failed to execute git commit command");
+
+                println!("Commit message sent successfully")
             }
             "a" | "add-info" => {
                 // Ask for more information and improve the commit message
