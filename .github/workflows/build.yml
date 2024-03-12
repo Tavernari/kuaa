@@ -43,6 +43,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./target/release/<your-binary-name>
-          asset_name: <your-binary-name>
+          asset_path: ./target/release/kuaa
+          asset_name: kuaa
           asset_content_type: application/octet-stream
