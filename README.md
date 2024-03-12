@@ -32,6 +32,7 @@ Replace `tavernari/kuaa` with the actual tap location where the formula resides.
 ### Setting the API Key
 
 Get your API Key from [kuaa.tools](https://kuaa.tools/dashboard/panel/api-keys/)
+You can set an env vars `KUAA_API_KEY` or you can use the command line to set it locally.
 To set the API key for Kuaa CLI, use the following command:
 
 ```sh

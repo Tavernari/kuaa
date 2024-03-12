@@ -197,7 +197,21 @@ fn save_api_key_to_env_file(key: &str) -> Result<(), IoError> {
     Ok(())
 }
 
-/// A simple CLI tool
+fn ensure_api_key() -> Option<String> {
+    match env::var(KUAA_API_KEY_ENV) {
+        Ok(api_key) if !api_key.is_empty() => Some(api_key),
+        _ => {
+            println!("{} environment variable is not set.", KUAA_API_KEY_ENV);
+            println!("To set the API key, run: kuaa config api-key <YOUR_API_KEY>");
+            println!(
+                "The API key must be generated on https://kuaa.tools/dashboard/panel/api-keys."
+            );
+            None
+        }
+    }
+}
+
+/// A CLI tool to interact with the Kuaa API, a tool to generate commit messages and more. https://kuaa.tools/dashboard/panel/tools
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Kuaa {
@@ -207,7 +221,7 @@ struct Kuaa {
 
 #[derive(Subcommand, Debug, Clone)]
 enum ConfigCommand {
-    /// Sets the API key
+    /// Sets the API key, to get the API key visit https://kuaa.tools/dashboard/panel/api-keys
     ApiKey {
         #[arg(name = "api-key")]
         key: String,
@@ -225,7 +239,7 @@ enum GenCommand {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Configure settings
+    /// Configure API key
     Config {
         #[command(subcommand)]
         config_command: ConfigCommand,
@@ -243,41 +257,46 @@ fn main() {
     let rt = Runtime::new().unwrap();
     rt.block_on(async {
         dotenv().ok(); // Load .env file contents into environment variables
-
         let cli = Kuaa::parse();
 
         match cli.command {
-            Commands::Config { config_command } => match config_command {
-                ConfigCommand::ApiKey { key } => {
-                    println!("Setting API key to: {}", key);
-                    if let Err(e) = save_api_key_to_env_file(&key) {
-                        eprintln!("Failed to save API key to .env file: {}", e);
-                    }
+            Commands::Config { config_command } => handle_config_command(config_command),
+            Commands::Gen { gen_command } => {
+                if let Some(api_key) = ensure_api_key() {
+                    handle_gen_command(gen_command, api_key).await;
                 }
-            },
-            Commands::Gen { gen_command } => match gen_command {
-                GenCommand::GitCommitMessage { git_commit_message } => {
-                    let diff = get_git_diff_staged().unwrap_or_else(|_| "".to_string());
-                    let comments = git_commit_message.unwrap_or_else(|| "".to_string());
-
-                    match env::var(KUAA_API_KEY_ENV) {
-                        Ok(api_key) => {
-                            if let Err(e) = send_git_diff(&api_key, diff, comments).await {
-                                eprintln!("Failed to send git diff: {}", e);
-                            }
-                        }
-                        Err(_) => println!("{} environment variable is not set.", KUAA_API_KEY_ENV),
-                    }
-                }
-            },
-            Commands::Balance {} => match env::var(KUAA_API_KEY_ENV) {
-                Ok(api_key) => {
+            }
+            Commands::Balance {} => {
+                if let Some(api_key) = ensure_api_key() {
                     if let Err(e) = fetch_balance(&api_key).await {
-                        eprintln!("Failed to send git diff: {}", e);
+                        eprintln!("Failed to fetch balance: {}", e);
                     }
                 }
-                Err(_) => println!("{} environment variable is not set.", KUAA_API_KEY_ENV),
-            },
+            }
         }
     });
+}
+
+fn handle_config_command(config_command: ConfigCommand) {
+    match config_command {
+        ConfigCommand::ApiKey { key } => {
+            println!("Setting API key to: {}", key);
+            if let Err(e) = save_api_key_to_env_file(&key) {
+                eprintln!("Failed to save API key to .env file: {}", e);
+            }
+        }
+    }
+}
+
+async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
+    match gen_command {
+        GenCommand::GitCommitMessage { git_commit_message } => {
+            let diff = get_git_diff_staged().unwrap_or_else(|_| "".to_string());
+            let comments = git_commit_message.unwrap_or_else(|| "".to_string());
+
+            if let Err(e) = send_git_diff(&api_key, diff, comments).await {
+                eprintln!("Failed to send git diff: {}", e);
+            }
+        }
+    }
 }
