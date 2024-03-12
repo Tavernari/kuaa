@@ -4,45 +4,79 @@ on:
   push:
     branches:
       - main
+  pull_request:
+    branches: 
+      - main
 
 jobs:
-  build_and_release:
-    runs-on: ubuntu-latest
+  build:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-apple-darwin
+            asset_name: kuaa-intel
+          - target: aarch64-apple-darwin
+            asset_name: kuaa-arm
     steps:
       - uses: actions/checkout@v2
-      - name: Install Rust
+      
+      - name: Install Rust toolchain
         uses: actions-rs/toolchain@v1
         with:
-          profile: minimal
           toolchain: stable
+          profile: minimal
           override: true
 
-      - name: Build Release
-        run: cargo build --release
+      - name: Build for ${{ matrix.target }}
+        run: cargo build --release --target ${{ matrix.target }}
+        env:
+          CARGO_BUILD_TARGET: ${{ matrix.target }}
 
-      - name: Extract branch name
-        shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        id: extract_branch
+      - name: Rename binary
+        run: mv target/${{ matrix.target }}/release/your-crate-name target/${{ matrix.target }}/release/${{ matrix.asset_name }}
 
+      - name: Upload binary for ${{ matrix.target }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+          
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+      
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.run_number }}-${{ steps.extract_branch.outputs.branch }}
-          release_name: Release ${{ github.run_number }} on ${{ steps.extract_branch.outputs.branch }}
+          tag_name: ${{ github.run_number }}-${{ github.ref_name }}
+          release_name: Release ${{ github.run_number }} on ${{ github.ref_name }}
           draft: false
           prerelease: false
 
-
-      - name: Upload Release Asset
+      - name: Upload Release Asset Intel
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./target/release/kuaa
-          asset_name: kuaa
+          asset_path: kuaa-intel
+          asset_name: kuaa-intel
+          asset_content_type: application/octet-stream
+
+      - name: Upload Release Asset ARM
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: kuaa-arm
+          asset_name: kuaa-arm
           asset_content_type: application/octet-stream
