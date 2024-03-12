@@ -9,7 +9,7 @@ on:
       - main
 
 jobs:
-  build_and_release:
+  build:
     runs-on: macos-latest
     strategy:
       matrix:
@@ -40,29 +40,38 @@ jobs:
       - name: Rename binary
         run: mv target/${{ matrix.target }}/release/kuaa target/${{ matrix.target }}/release/${{ matrix.asset_name }}
 
-      # Create and upload a release only on push to main branch
-      - name: Create and Upload Release Asset
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Upload binary for ${{ matrix.target }}
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v2
+      # This will download artifacts to the root of the workspace in directories named after the artifacts
+  
+      - name: Upload Release Asset Intel
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          TAG_NAME="v$(date +'%Y.%m.%d')-${GITHUB_RUN_NUMBER}"
-          RELEASE_NAME="Release $TAG_NAME"
-          
-          # Create a release
-          RELEASE_ID=$(gh release create $TAG_NAME \
-            --title "$RELEASE_NAME" \
-            --notes "Release notes or changelog" \
-            --draft \
-            --target ${{ github.ref }} \
-            --json id | jq .id)
-          
-          # Upload the asset
-          gh release upload $TAG_NAME \
-            "./target/${{ matrix.target }}/release/${{ matrix.asset_name }}" \
-            --clobber
-          
-          # Publish the release
-          gh release edit $TAG_NAME \
-            --draft=false
-        shell: bash
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./kuaa-intel/kuaa-intel # Corrected path assuming kuaa-intel is the directory and file name
+          asset_name: kuaa-intel
+          asset_content_type: application/octet-stream
+    
+      - name: Upload Release Asset ARM
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./kuaa-arm/kuaa-arm # Corrected path assuming kuaa-arm is the directory and file name
+          asset_name: kuaa-arm
+          asset_content_type: application/octet-stream
+  
