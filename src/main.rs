@@ -93,7 +93,11 @@ async fn fetch_balance(api_key: &str) -> Result<(), ReqwestError> {
     Ok(())
 }
 
-async fn send_git_diff(api_key: &str, diff: String, comments: String) -> Result<(), ReqwestError> {
+async fn send_git_diff(
+    api_key: &str,
+    diff: String,
+    comments: String,
+) -> Result<String, ReqwestError> {
     let client = Client::new();
 
     let full_url = format!("{}{}", KUAA_SERVER_URL, "/api/prompt");
@@ -148,15 +152,15 @@ async fn send_git_diff(api_key: &str, diff: String, comments: String) -> Result<
             "- Total Tokens: {}",
             Yellow.paint(response_json.result.usage.total_tokens.to_string())
         );
+        Ok(response_json.result.content.to_string())
     } else {
         println!(
             "{} {}",
             Red.bold().paint("Failed to send data. Status:"),
             response.status()
         );
+        Err(response.error_for_status().unwrap_err())
     }
-
-    Ok(())
 }
 
 fn save_api_key_to_env_file(key: &str) -> Result<(), IoError> {
@@ -294,9 +298,66 @@ async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
             let diff = get_git_diff_staged().unwrap_or_else(|_| "".to_string());
             let comments = git_commit_message.unwrap_or_else(|| "".to_string());
 
-            if let Err(e) = send_git_diff(&api_key, diff, comments).await {
-                eprintln!("Failed to send git diff: {}", e);
+            match send_git_diff(&api_key, diff, comments).await {
+                Err(e) => {
+                    eprintln!("Failed to send git diff: {}", e);
+                }
+                Ok(result) => {
+                    let _ = handle_commit_message(result).await;
+                }
             }
         }
     }
+}
+
+fn handle_commit_message(commit_message: String) -> tokio::task::JoinHandle<()> {
+    tokio::task::spawn(async move {
+        println!("Would you like to perform any actions? [[c]ommit, [a]dd-info, [n]othing]");
+        let mut action = String::new();
+        std::io::stdin()
+            .read_line(&mut action)
+            .expect("Failed to read line");
+        let action = action.trim().to_lowercase(); // Normalize the input
+
+        match action.as_str() {
+            "c" | "commit" => {
+                // Implement commit with the generated message
+                println!("Committing with the generated message...");
+                // Implementation of git commit command execution
+
+                // commit_message format
+                //     ```plaintext
+                // Create an empty test.txt file
+                // - Initialized a new text file without content
+                // ```
+                // remove if exist ```plaintext and ```
+                let commit_message = commit_message
+                    .replace("```plaintext", "")
+                    .replace("```", "")
+                    .trim()
+                    .to_string();
+
+                // execute git commit -m "Generated message"
+                println!("Commit message: {}", commit_message);
+
+                std::process::Command::new("git")
+                    .arg("commit")
+                    .arg("-m")
+                    .arg(commit_message)
+                    .output()
+                    .expect("Failed to execute git commit command");
+            }
+            "a" | "add-info" => {
+                // Ask for more information and improve the commit message
+                println!("Please input more information:");
+                let mut info = String::new();
+                std::io::stdin()
+                    .read_line(&mut info)
+                    .expect("Failed to read line");
+                // Implementation to add info to the commit message or regenerate it
+            }
+            "n" | "nothing" => println!("Finishing the process."),
+            _ => println!("Invalid action. Please choose [[c]ommit, [a]dd-info, [n]othing]"),
+        }
+    })
 }
