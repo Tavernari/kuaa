@@ -18,6 +18,7 @@ jobs:
             asset_name: kuaa-intel
           - target: aarch64-apple-darwin
             asset_name: kuaa-arm
+
     steps:
       - uses: actions/checkout@v2
       
@@ -27,6 +28,9 @@ jobs:
           toolchain: stable
           profile: minimal
           override: true
+          
+      - name: Add target ${{ matrix.target }}
+        run: rustup target add ${{ matrix.target }}
 
       - name: Build for ${{ matrix.target }}
         run: cargo build --release --target ${{ matrix.target }}
@@ -34,14 +38,14 @@ jobs:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
 
       - name: Rename binary
-        run: mv target/${{ matrix.target }}/release/your-crate-name target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+        run: mv target/${{ matrix.target }}/release/kuaae target/${{ matrix.target }}/release/${{ matrix.asset_name }}
 
       - name: Upload binary for ${{ matrix.target }}
         uses: actions/upload-artifact@v2
         with:
           name: ${{ matrix.asset_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.asset_name }}
-          
+
   release:
     needs: build
     runs-on: ubuntu-latest
@@ -49,7 +53,7 @@ jobs:
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v2
-      
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
