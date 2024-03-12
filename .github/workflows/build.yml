@@ -38,7 +38,7 @@ jobs:
           CARGO_BUILD_TARGET: ${{ matrix.target }}
 
       - name: Rename binary
-        run: mv target/${{ matrix.target }}/release/kuaae target/${{ matrix.target }}/release/${{ matrix.asset_name }}
+        run: mv target/${{ matrix.target }}/release/kuaa target/${{ matrix.target }}/release/${{ matrix.asset_name }}
 
       - name: Upload binary for ${{ matrix.target }}
         uses: actions/upload-artifact@v2
