@@ -299,6 +299,11 @@ async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
         GenCommand::GitCommitMessage { git_commit_message } => {
             let diff = get_git_diff_staged().unwrap_or_else(|_| "".to_string());
 
+            if diff.is_empty() {
+                println!("No staged changes to generate a commit message.");
+                return;
+            }
+
             // comments must be a string prioritizing git_commit_message then coments then empty string
             let comments = git_commit_message.clone().unwrap_or_else(|| "".to_string());
 
