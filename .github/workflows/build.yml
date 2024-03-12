@@ -71,7 +71,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: kuaa/kuaa-intel
+          asset_path: ./kuaa/kuaa-intel
           asset_name: kuaa-intel
           asset_content_type: application/octet-stream
 
@@ -81,6 +81,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: kuaa/kuaa-arm
+          asset_path: ./kuaa/kuaa-arm
           asset_name: kuaa-arm
           asset_content_type: application/octet-stream
