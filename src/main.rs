@@ -97,6 +97,7 @@ async fn send_git_diff(
     api_key: &str,
     diff: String,
     comments: Option<String>,
+    only_message: bool,
 ) -> Result<String, ReqwestError> {
     let client = Client::new();
 
@@ -132,6 +133,10 @@ async fn send_git_diff(
 
     if response.status().is_success() {
         let response_json: ApiResponse = response.json().await?;
+
+        if only_message {
+            return Ok(response_json.result.content.to_string());
+        }
 
         println!("{}", Style::new().bold().paint("### Git Commit Message\n"));
         println!(
@@ -240,6 +245,10 @@ enum GenCommand {
     GitCommitMessage {
         #[arg(name = "git-commit-message")]
         git_commit_message: Option<String>,
+        #[arg(name = "only-message", short, long)]
+        only_message: bool,
+        #[arg(name = "api-key", short, long)]
+        provided_api_key: Option<String>,
     },
 }
 
@@ -296,7 +305,11 @@ fn handle_config_command(config_command: ConfigCommand) {
 
 async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
     match gen_command {
-        GenCommand::GitCommitMessage { git_commit_message } => {
+        GenCommand::GitCommitMessage {
+            git_commit_message,
+            only_message,
+            provided_api_key,
+        } => {
             let diff = get_git_diff_staged().unwrap_or_else(|_| "".to_string());
 
             if diff.is_empty() {
@@ -307,16 +320,32 @@ async fn handle_gen_command(gen_command: GenCommand, api_key: String) {
             // comments must be a string prioritizing git_commit_message then coments then empty string
             let comments = git_commit_message.clone().unwrap_or_else(|| "".to_string());
 
-            match send_git_diff(&api_key, diff, Some(comments)).await {
+            // if api_key is provided, use it, otherwise use the one from the environment
+            let auth_api_key = provided_api_key.unwrap_or(api_key);
+
+            match send_git_diff(&auth_api_key, diff, Some(comments), only_message).await {
                 Err(e) => {
                     eprintln!("Failed to send git diff: {}", e);
                 }
                 Ok(result) => {
-                    let _ = handle_commit_message(result).await;
+                    if only_message {
+                        println!("{}", parse_commit_message_content(&result));
+                    } else {
+                        let _ = handle_commit_message(result).await;
+                    }
                 }
             }
         }
     }
+}
+
+fn parse_commit_message_content(commit_message: &str) -> String {
+    return commit_message
+        .replace("```plaintext", "")
+        .replace("```diff", "")
+        .replace("```", "")
+        .trim()
+        .to_string();
 }
 
 fn handle_commit_message(commit_message: String) -> tokio::task::JoinHandle<()> {
@@ -334,17 +363,7 @@ fn handle_commit_message(commit_message: String) -> tokio::task::JoinHandle<()> 
                 println!("Committing with the generated message...");
                 // Implementation of git commit command execution
 
-                // commit_message format
-                //     ```plaintext
-                // Create an empty test.txt file
-                // - Initialized a new text file without content
-                // ```
-                // remove if exist ```plaintext and ```
-                let commit_message = commit_message
-                    .replace("```plaintext", "")
-                    .replace("```", "")
-                    .trim()
-                    .to_string();
+                let commit_message = parse_commit_message_content(&commit_message);
 
                 // execute git commit -m "Generated message"
                 println!("Commit message: {}", commit_message);
